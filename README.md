@@ -40,14 +40,38 @@ Va bene allo stesso modo qualunque altro hosting statico (Firebase Hosting, Netl
 `app.js` contiene già la configurazione del progetto Firebase dello Staffing (`staffing-portal-eeef6`),
 scritta direttamente nel file. Per un sito statico senza build questa è la prassi normale: la
 configurazione client di Firebase **è pubblica per design** — la sicurezza reale è affidata alle
-Security Rules del database, non alla segretezza di questi valori. Non contiene invece nessuna chiave
-segreta.
+Security Rules del database e dello Storage, non alla segretezza di questi valori. Non contiene
+invece nessuna chiave segreta.
+
+## Immagini e loghi: Firebase Storage, non Realtime Database
+
+Le immagini delle referenze (architetture, screenshot) e i loghi cliente sono salvati come file su
+**Firebase Storage** — nel Realtime Database viene salvato solo il percorso del file. Caricamento e
+scaricamento passano sempre dall'SDK autenticato (`uploadString` / `getBlob`), mai da un link
+pubblico condivisibile: l'accesso a ogni file viene verificato dalle Storage Rules a ogni richiesta.
+
+Regole consigliate (Console Firebase → Storage → Rules):
+
+```
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /referenze/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+Limite noto: queste regole verificano solo che l'utente sia autenticato, non il suo `gruppo` (le
+Storage Rules non possono leggere direttamente il Realtime Database). Per un controllo per gruppo
+servirebbero custom claims impostati lato server.
 
 ## ⚠️ Stesse due limitazioni della versione Vite
 
 1. **Security Rules**: verifica in Console Firebase che permettano, per utenti autenticati, la lettura
-   di `/users/{auth.uid}` e lettura/scrittura di `/referenze/**`, senza allargare i permessi sugli
-   altri nodi già in uso dallo Staffing.
+   di `/users/{auth.uid}` e lettura/scrittura di `/referenze/**` (Realtime Database) e del percorso
+   `referenze/**` su Storage, senza allargare i permessi sugli altri nodi già in uso dallo Staffing.
 2. **Funzioni AI**: "Struttura con AI" e l'Assistente AI chiamano `api.anthropic.com` direttamente dal
    browser — funzionava solo dentro la sandbox degli artifact di Claude.ai, che iniettava
    l'autenticazione automaticamente. Qui serve un backend/proxy proprio con una vera chiave API
